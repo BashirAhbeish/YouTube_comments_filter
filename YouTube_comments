@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ar">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>عارض فيديو يوتيوب وتعليقاته</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f9f9f9;
+      direction: rtl;
+      padding: 20px;
+    }
+    input, button {
+      padding: 10px;
+      font-size: 16px;
+      margin-bottom: 15px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      width: 100%;
+    }
+    iframe {
+      width: 100%;
+      height: 315px;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      border: none;
+    }
+    .comment {
+      background: white;
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 10px;
+      box-shadow: 0 0 4px rgba(0,0,0,0.1);
+    }
+    .hidden {
+      display: none;
+    }
+    .actions {
+      margin-top: 10px;
+    }
+    .btn {
+      font-size: 14px;
+      padding: 5px 10px;
+      margin-left: 5px;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .read { background-color: #d4edda; }
+    .fav { background-color: #fff3cd; }
+  </style>
+</head>
+<body>
+  <h2>عارض فيديو يوتيوب وتعليقاته</h2>
+
+  <input type="text" id="videoIdInput" placeholder="أدخل معرف الفيديو (مثال: dQw4w9WgXcQ)" />
+  <button onclick="loadVideo()">تحميل الفيديو</button>
+
+  <div id="videoContainer"></div>
+  <h3>التعليقات:</h3>
+  <button onclick="filterUnread()">عرض غير المقروء فقط</button>
+  <div id="commentsContainer"></div>
+
+  <script>
+    const apiKey = "AIzaSyC64_qo3YuE9hfe175JaEbl32yXTx7Hneg";
+    let currentVideoId = "";
+
+    function loadVideo() {
+      const videoId = document.getElementById('videoIdInput').value.trim();
+      if (!videoId) return;
+
+      currentVideoId = videoId;
+      const videoContainer = document.getElementById('videoContainer');
+      videoContainer.innerHTML = `<iframe src="https://www.youtube.com/embed/${videoId}" allowfullscreen></iframe>`;
+
+      markVideoAsWatched(videoId);
+      fetchComments(videoId);
+    }
+
+    function fetchComments(videoId) {
+      const commentsContainer = document.getElementById('commentsContainer');
+      commentsContainer.innerHTML = "جاري تحميل التعليقات...";
+
+      fetch(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&key=${apiKey}&maxResults=50`)
+        .then(res => res.json())
+        .then(data => {
+          commentsContainer.innerHTML = '';
+          data.items.forEach(item => {
+            const commentId = item.id;
+            const commentText = item.snippet.topLevelComment.snippet.textDisplay;
+            const isRead = getCommentStatus(videoId, commentId, 'read');
+            const isFav = getCommentStatus(videoId, commentId, 'fav');
+
+            const commentEl = document.createElement('div');
+            commentEl.className = `comment ${isRead ? 'hidden' : ''}`;
+            commentEl.innerHTML = `
+              <div>${commentText}</div>
+              <div class="actions">
+                <button class="btn read" onclick="markComment('${commentId}', 'read', this)">تمت القراءة</button>
+                <button class="btn fav" onclick="markComment('${commentId}', 'fav', this)">مفضلة</button>
+              </div>
+            `;
+            commentsContainer.appendChild(commentEl);
+          });
+        });
+    }
+
+    function markComment(commentId, type, btn) {
+      const key = `${currentVideoId}_${commentId}_${type}`;
+      localStorage.setItem(key, '1');
+      if (type === 'read') {
+        btn.closest('.comment').classList.add('hidden');
+      }
+    }
+
+    function getCommentStatus(videoId, commentId, type) {
+      const key = `${videoId}_${commentId}_${type}`;
+      return localStorage.getItem(key) === '1';
+    }
+
+    function filterUnread() {
+      document.querySelectorAll('.comment').forEach(el => {
+        el.classList.toggle('hidden', getCommentStatus(currentVideoId, el.dataset.id, 'read'));
+      });
+    }
+
+    function markVideoAsWatched(videoId) {
+      localStorage.setItem(`video_${videoId}_watched`, '1');
+    }
+  </script>
+</body>
+</html>
