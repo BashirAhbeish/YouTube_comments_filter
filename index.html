@@ -10,7 +10,7 @@
       direction: rtl;
       padding: 20px;
     }
-    input, button {
+    input, button, select {
       padding: 10px;
       font-size: 16px;
       margin-bottom: 15px;
@@ -33,66 +33,105 @@
       box-shadow: 0 0 4px rgba(0,0,0,0.1);
     }
     .read {
-      background-color: #d4edda;
+      background-color: #e6ffe6;
+    }
+    .favorite {
+      background-color: #fff0b3;
     }
     .btn {
-      padding: 5px 10px;
       margin-top: 5px;
-      border: none;
+      padding: 5px 10px;
       border-radius: 4px;
+      border: none;
       cursor: pointer;
+    }
+    #filter {
+      margin-bottom: 20px;
     }
   </style>
 </head>
 <body>
-  <h2>أدخل معرف فيديو يوتيوب</h2>
-  <input type="text" id="videoIdInput" placeholder="مثال: dQw4w9WgXcQ" />
-  <iframe id="videoPlayer" src="" allowfullscreen></iframe>
+  <h2>عارض فيديو يوتيوب وتعليقاته</h2>
+  <input type="text" id="videoIdInput" placeholder="أدخل معرف الفيديو (مثل dQw4w9WgXcQ)">
+  <iframe id="videoFrame" src="" allowfullscreen></iframe>
+  <select id="filter">
+    <option value="all">كل التعليقات</option>
+    <option value="unread">غير المقروءة</option>
+    <option value="favorite">المفضلة</option>
+    <option value="read-oldest">المقروءة (الأقدم أولا)</option>
+  </select>
   <div id="comments"></div>  <script>
-    const apiKey = "AIzaSyC64_qo3YuE9hfe175JaEbl32yXTx7Hneg"; // ← ضع مفتاح API الخاص بك هنا
-    const videoIdInput = document.getElementById("videoIdInput");
-    const videoPlayer = document.getElementById("videoPlayer");
-    const commentsContainer = document.getElementById("comments");
+    const apiKey = "AIzaSyC64_qo3YuE9hfe175JaEbl32yXTx7Hneg";
+    const commentsContainer = document.getElementById('comments');
+    const videoIdInput = document.getElementById('videoIdInput');
+    const videoFrame = document.getElementById('videoFrame');
+    const filterSelect = document.getElementById('filter');
 
-    videoIdInput.addEventListener("change", () => {
+    let allComments = [];
+
+    videoIdInput.addEventListener('change', () => {
       const videoId = videoIdInput.value.trim();
-      if (!videoId) return;
-      videoPlayer.src = `https://www.youtube.com/embed/${videoId}`;
+      videoFrame.src = `https://www.youtube.com/embed/${videoId}`;
       fetchComments(videoId);
     });
 
+    filterSelect.addEventListener('change', renderComments);
+
     function fetchComments(videoId) {
-      const url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&key=${apiKey}&maxResults=20`;
+      const url = `https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${videoId}&key=${apiKey}&maxResults=100`;
       fetch(url)
-        .then(response => response.json())
+        .then(res => res.json())
         .then(data => {
-          commentsContainer.innerHTML = "";
-          data.items.forEach(item => {
-            const commentText = item.snippet.topLevelComment.snippet.textDisplay;
-            const commentId = item.id;
-            const commentDiv = document.createElement("div");
-            commentDiv.className = "comment";
-            commentDiv.innerHTML = `
-              <div>${commentText}</div>
-              <button class="btn" onclick="markAsRead('${commentId}', this)">تمت قراءته</button>
-            `;
-
-            if (localStorage.getItem(`read-${commentId}`)) {
-              commentDiv.classList.add("read");
-            }
-
-            commentsContainer.appendChild(commentDiv);
+          allComments = data.items.map(item => {
+            const id = item.id;
+            const text = item.snippet.topLevelComment.snippet.textDisplay;
+            const saved = JSON.parse(localStorage.getItem(id)) || {};
+            return { id, text, ...saved };
           });
-        })
-        .catch(err => {
-          commentsContainer.innerHTML = "تعذر تحميل التعليقات. تأكد من صحة معرف الفيديو أو مفتاح API.";
-          console.error(err);
+          renderComments();
         });
     }
 
-    function markAsRead(commentId, btn) {
-      localStorage.setItem(`read-${commentId}`, "true");
-      btn.parentElement.classList.add("read");
+    function renderComments() {
+      commentsContainer.innerHTML = '';
+      let commentsToShow = [...allComments];
+      const filter = filterSelect.value;
+
+      if (filter === 'unread') {
+        commentsToShow = commentsToShow.filter(c => !c.read);
+      } else if (filter === 'favorite') {
+        commentsToShow = commentsToShow.filter(c => c.favorite);
+      } else if (filter === 'read-oldest') {
+        commentsToShow = commentsToShow.filter(c => c.read).sort((a, b) => (a.readAt || 0) - (b.readAt || 0));
+      }
+
+      commentsToShow.forEach(comment => {
+        const div = document.createElement('div');
+        div.className = 'comment';
+        if (comment.read) div.classList.add('read');
+        if (comment.favorite) div.classList.add('favorite');
+        div.innerHTML = `
+          <p>${comment.text}</p>
+          <button class="btn" onclick="markRead('${comment.id}')">تمت القراءة</button>
+          <button class="btn" onclick="toggleFavorite('${comment.id}')">⭐</button>
+        `;
+        commentsContainer.appendChild(div);
+      });
+    }
+
+    function markRead(id) {
+      const comment = allComments.find(c => c.id === id);
+      comment.read = true;
+      comment.readAt = Date.now();
+      localStorage.setItem(id, JSON.stringify(comment));
+      renderComments();
+    }
+
+    function toggleFavorite(id) {
+      const comment = allComments.find(c => c.id === id);
+      comment.favorite = !comment.favorite;
+      localStorage.setItem(id, JSON.stringify(comment));
+      renderComments();
     }
   </script></body>
 </html>
